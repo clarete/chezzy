@@ -157,8 +157,8 @@
      /* Go through all the pieces currently available on the game state */
      const drawPieces = () => {
        for (const [algebraicNotation, piece] of Object.entries(boardState)) {
-         const [column, row] = algebraicNotationToIndex(algebraicNotation);
-         const [x, y] = [row * tileWidthPx, column * tileHeightPx];
+         const [row, column] = algebraicNotationToIndex(algebraicNotation);
+         const [x, y] = [column * tileWidthPx, row * tileHeightPx];
          context.drawImage(piece.image, x, y, tileWidthPx, tileHeightPx)
        }
      };

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <title>chezzy</title>
+    <meta name="description" content="Cheezy Chess">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <script>
+     /* Constants */
+     const tilePx = 70;
+     const [tileWidthPx, tileHeightPx] = [tilePx, tilePx];
+     const [boardWidthTile, boardHeightTile] = [8, 8];
+     const [boardWidthPx, boardHeightPx] = [tileWidthPx * boardWidthTile, tileHeightPx * boardHeightTile];
+     /* Game state */
+     const pieces = [];
+
+     /* Access to Canvas API */
+     const canvas = document.getElementById("canvas");
+     const context = canvas.getContext("2d");
+     /* Configure canvas Object */
+     [canvas.width, canvas.height] = [boardWidthPx, boardHeightPx];
+     /* Draw the board with the styles passed to the theme parameters */
+     const drawBoard = ({ player1Style, player2Style, tileBorderStyle, paddingPx }) => {
+       context.strokeStyle = tileBorderStyle;
+       const padding2Px = paddingPx * 2;
+       let player1 = false;
+       for (let column = 0; column < boardWidthTile; column++) {
+         player1 = !player1;
+         for (let row = 0; row < boardHeightTile; row++) {
+           const [x, y] = [column * tileWidthPx, row * tileHeightPx];
+           context.fillStyle = player1 ? player1Style : player2Style;
+           player1 = !player1;
+           context.fillRect(x+paddingPx, y+paddingPx, tileWidthPx-padding2Px, tileHeightPx-padding2Px);
+           context.strokeRect(x+paddingPx, y+paddingPx, tileWidthPx-padding2Px, tileHeightPx-padding2Px);
+         }
+       }
+     };
+     const draw = () => {
+       drawBoard({
+         player1Style: '#eee',
+         player2Style: '#666',
+         tileBorderStyle: '#444',
+         paddingPx: 0,
+       });
+     };
+
+     draw();
+     
+    </script>
+  </body>
+</html>

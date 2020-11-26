@@ -127,15 +127,28 @@
        }
      };
 
+     /* Pre-loader for all the image pieces */
+     const preLoadedImages = {};
      const preLoadImages = (callback) => {
-       let howMany = -1;
+       let howMany = 0;
        for (const piece of Object.values(boardState)) {
+         /* Retrieve the URL of the image from the data we have in the
+            piece itself. */
+         const src = pieceImageRelativeUrl(piece);
+         /* If we've seen that source image before, just use it */
+         if (preLoadedImages[src] !== undefined) {
+           piece.image = preLoadedImages[src];
+           continue;
+         }
+         /* We haven't seen that URL before.  Let's load it up */
          piece.image = new Image();
-         piece.image.src = pieceImageRelativeUrl(piece);
+         piece.image.src = src;
          piece.image.onload = () => {
-           const missing = howMany--;
-           if (missing === 0)
+           /* If that was the last image to be loaded, run the user
+              provided callback. */
+           if (--howMany === 0) {
              callback();
+           }
          };
          howMany++;
        }

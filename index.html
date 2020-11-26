@@ -9,14 +9,102 @@
   <body>
     <canvas id="canvas"></canvas>
     <script>
-     /* Constants */
+     const [boardWidthTile, boardHeightTile] = [8, 8];
+     const PlayerID = {
+       One: 0,
+       Two: 1,
+     };
+     const PieceType = {
+       Bishop: 0,
+       King:   1,
+       Knight: 2,
+       Pawn:   3,
+       Queen:  4,
+       Rook:   5,
+     };
+     /* make up the prototype of a single piece */
+     const pieceNew = (pieceType, playerID) => ({
+       pieceType: pieceType,
+       playerID:  playerID,
+       image: null,
+     });
+     /* build the relative URL of a given piece.  Thank you very much
+        Wikipedia for the beautiful chess images taken from here
+        https://en.wikipedia.org/wiki/Chess_piece#Number_of_pieces
+
+        For anybody else reading this.  Don't be a skimpy winky.  Just
+        donate some money to Wikipedia already. */
+     const pieceImageRelativeUrl = piece => {
+       const pieceLetter = {
+         [PieceType.Bishop]: 'b',
+         [PieceType.King]:   'k',
+         [PieceType.Knight]: 'n',
+         [PieceType.Pawn]:   'p',
+         [PieceType.Queen]:  'q',
+         [PieceType.Rook]:   'r',
+       }[piece.pieceType];
+       const playerLetter = {
+         [PlayerID.One]: 'l',
+         [PlayerID.Two]: 'd',
+       }[piece.playerID];
+       return `imgs/Chess_${pieceLetter}${playerLetter}t45.svg`;
+     };
+
+     /* Converts the algebraic notation to coordinates in the matrix. */
+     const algebraicNotationToIndex = algebraicNotation => {
+       /* The character 'a' occupies position 97 in the ASCII table,
+          and '1' occupies 49 */
+       const columnId = algebraicNotation.charCodeAt(0) - 97;
+       const rowId = algebraicNotation.charCodeAt(1) - 49;
+       /* The chess board coordinates start from the lower left
+          corner, while the javascript canvas starts from the upper
+          left corner. That's why we've got this lil subtraction
+          here. */
+       return [7 - rowId, columnId];
+     };
+
+     const makeInitialState = () => ({
+       'a1': pieceNew(PieceType.Rook, PlayerID.One),
+       'b1': pieceNew(PieceType.Knight, PlayerID.One),
+       'c1': pieceNew(PieceType.Bishop, PlayerID.One),
+       'd1': pieceNew(PieceType.Queen, PlayerID.One),
+       'e1': pieceNew(PieceType.King, PlayerID.One),
+       'f1': pieceNew(PieceType.Bishop, PlayerID.One),
+       'g1': pieceNew(PieceType.Knight, PlayerID.One),
+       'h1': pieceNew(PieceType.Rook, PlayerID.One),
+       'a2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'b2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'c2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'd2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'e2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'f2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'g2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'h2': pieceNew(PieceType.Pawn, PlayerID.One),
+       'a8': pieceNew(PieceType.Rook, PlayerID.Two),
+       'b8': pieceNew(PieceType.Knight, PlayerID.Two),
+       'c8': pieceNew(PieceType.Bishop, PlayerID.Two),
+       'd8': pieceNew(PieceType.Queen, PlayerID.Two),
+       'e8': pieceNew(PieceType.King, PlayerID.Two),
+       'f8': pieceNew(PieceType.Bishop, PlayerID.Two),
+       'g8': pieceNew(PieceType.Knight, PlayerID.Two),
+       'h8': pieceNew(PieceType.Rook, PlayerID.Two),
+       'a7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'b7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'c7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'd7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'e7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'f7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'g7': pieceNew(PieceType.Pawn, PlayerID.Two),
+       'h7': pieceNew(PieceType.Pawn, PlayerID.Two),
+     });
+
+     /* Game state */
+     const boardState = makeInitialState();
+
+     /* Display Constants */
      const tilePx = 70;
      const [tileWidthPx, tileHeightPx] = [tilePx, tilePx];
-     const [boardWidthTile, boardHeightTile] = [8, 8];
      const [boardWidthPx, boardHeightPx] = [tileWidthPx * boardWidthTile, tileHeightPx * boardHeightTile];
-     /* Game state */
-     const pieces = [];
-
      /* Access to Canvas API */
      const canvas = document.getElementById("canvas");
      const context = canvas.getContext("2d");
@@ -38,6 +126,30 @@
          }
        }
      };
+
+     const preLoadImages = (callback) => {
+       let howMany = -1;
+       for (const piece of Object.values(boardState)) {
+         piece.image = new Image();
+         piece.image.src = pieceImageRelativeUrl(piece);
+         piece.image.onload = () => {
+           const missing = howMany--;
+           if (missing === 0)
+             callback();
+         };
+         howMany++;
+       }
+     };
+
+     /* Go through all the pieces currently available on the game state */
+     const drawPieces = () => {
+       for (const [algebraicNotation, piece] of Object.entries(boardState)) {
+         const [column, row] = algebraicNotationToIndex(algebraicNotation);
+         const [x, y] = [row * tileWidthPx, column * tileHeightPx];
+         context.drawImage(piece.image, x, y, tileWidthPx, tileHeightPx)
+       }
+     };
+
      const draw = () => {
        drawBoard({
          player1Style: '#eee',
@@ -45,9 +157,11 @@
          tileBorderStyle: '#444',
          paddingPx: 0,
        });
+
+       drawPieces();
      };
 
-     draw();
+     preLoadImages(draw);
      
     </script>
   </body>

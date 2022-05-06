@@ -101,13 +101,13 @@
        return [7 - rowId, columnId];
      };
      /* Converts board coordinates to algebraic notation */
-     const indexToAlgebraicNotatin = (row, column) => {
+     const indexToAlgebraicNotation = (row, column) => {
        const columnID = String.fromCharCode(column + 97);
        const rowID = String.fromCharCode((7 - row) + 49);
        return `${columnID}${rowID}`;
      };
 
-     const makeInitialState = () => ({
+     const makeInitialBoard = () => ({
        'a1': pieceNew(PieceType.Rook, PlayerID.One),
        'b1': pieceNew(PieceType.Knight, PlayerID.One),
        'c1': pieceNew(PieceType.Bishop, PlayerID.One),
@@ -143,9 +143,13 @@
      });
 
      /* Game state */
-     const boardState = makeInitialState();
+     const boardState = makeInitialBoard();
      const moveLog = [];
-     let dragging = false;
+     const dndState = {
+       dragging: false,
+       selectedPiece: undefined,
+       selectedAN: undefined,
+     };
 
      /* Decides who plays the next move */
      const whosTurn = () => {
@@ -287,18 +291,37 @@
        boarderBGStyle,
        boarderFGStyle,
        tileBorderStyle,
+       tileSelectedStyle,
        paddingPx,
      }) => {
        context.strokeStyle = tileBorderStyle;
        const padding2Px = paddingPx * 2;
+       let possibleTiles = [];
+
+       if (dndState.selectedPiece !== undefined &&
+           dndState.selectedAN !== undefined) {
+         possibleTiles = possibleMoves(
+           dndState.selectedPiece,
+           dndState.selectedAN,
+         );
+         console.log(
+           `possibleMoves for '${dndState.selectedAN}': ${JSON.stringify(possibleTiles)}`
+         );
+       }
 
        let player1 = false;
        for (let column = 0; column < boardWidthTile; column++) {
          player1 = !player1;
          for (let row = 0; row < boardHeightTile; row++) {
            const [x, y] = [column * tileWidthPx, row * tileHeightPx];
+           const an = indexToAlgebraicNotation(row, column);
            context.fillStyle = player1 ? player1Style : player2Style;
            player1 = !player1;
+
+           if (possibleTiles.includes(an)) {
+             context.fillStyle = tileSelectedStyle;
+           }
+
            context.fillRect(
              boarderThickness+x+paddingPx,
              boarderThickness+y+paddingPx,
@@ -378,6 +401,7 @@
          boarderBGStyle: '#000',
          boarderFGStyle: '#fff',
          tileBorderStyle: '#444',
+         tileSelectedStyle: '#fc0',
          paddingPx: 0,
        });
 
@@ -390,7 +414,7 @@
        return { x, y };
      }
 
-     const mouseCoordsToIndex = ({ x, y }) => {
+     const mouseCoordsToAN = ({ x, y }) => {
        if (x > boardWidthPx-boarderThickness || y > boardHeightPx-boarderThickness) {
          return null;
        }
@@ -399,56 +423,105 @@
        return `${letters[Math.ceil(column)-1]}${boardHeightTile-row+1}`;
      }
 
+     const possibleMoves = (piece, an) => {
+       const [row, col] = algebraicNotationToIndex(an);
+       switch (piece.pieceType) {
+         case PieceType.Bishop:
+           break;
+         case PieceType.King:
+           break;
+         case PieceType.Knight:
+           break;
+         case PieceType.Pawn:
+           switch (piece.playerID) {
+             case PlayerID.One:
+               if (row === 6) // zero based
+                 return [
+                   indexToAlgebraicNotation(row-1, col),
+                   indexToAlgebraicNotation(row-2, col),
+                 ];
+               if (row-1 > 0)
+                 return [indexToAlgebraicNotation(row-1, col)];
+             case PlayerID.Two:
+               if (row === 1) // zero based
+                 return [
+                   indexToAlgebraicNotation(row+1, col),
+                   indexToAlgebraicNotation(row+2, col),
+                 ];
+               if (row+1 > 0)
+                 return [indexToAlgebraicNotation(row+1, col)];
+           }
+           break;
+         case PieceType.Queen:
+           break;
+         case PieceType.Rook:
+           break;
+       }
+       return [];
+     };
+
      canvas.addEventListener("mouseout", (e) => {
-       // first disable dragging
-       dragging = false;
+       // TODO: Should cancel the moving of the piece
        const { x: mouseX, y: mouseY } = mouseCoords(e);
-       /*
-          TODO: Should cancel the moving too
-        */
        console.log(`out mouseX=${mouseX}, mouseY=${mouseY}`)
+
+       // reset drag and drop state
+       dndState.dragging = false;
+       dndState.selectedPiece = undefined;
+       dndState.selectedAN = undefined;
+
+       // redraw with the dndState set
+       window.requestAnimationFrame(draw);
      });
 
      canvas.addEventListener("mouseup", (e) => {
-       // first disable dragging
-       dragging = false;
        const coords = mouseCoords(e);
-       const index = mouseCoordsToIndex(coords);
-       const piece = boardState[index];
+       const an = mouseCoordsToAN(coords);
+       const piece = boardState[an];
        const str = piece === undefined ? "empty" : pieceStr(piece);
-       console.log(`drop at ${index} (${str})`)
+       console.log(`drop at ${an} (${str})`)
+
+       // reset drag and drop state
+       dndState.dragging = false;
+       dndState.selectedPiece = undefined;
+       dndState.selectedAN = undefined;
+
+       // redraw with the dndState set
+       window.requestAnimationFrame(draw);
      });
+
      canvas.addEventListener("mousedown", (e) => {
-       /* first enable dragging in case that's what the user wants */
-       dragging = true;
+       e.preventDefault();
+
        const coords = mouseCoords(e);
-       const index = mouseCoordsToIndex(coords);
-       const piece = boardState[index];
+       const an = mouseCoordsToAN(coords);
+       const piece = boardState[an];
        const str = piece === undefined ? "empty" : pieceStr(piece);
-       console.log(`click at ${index} (${str})`)
+       console.log(`click at ${an} (${str})`)
+
+       // update drag and drop state
+       dndState.dragging = true;
+       dndState.selectedPiece = piece;
+       dndState.selectedAN = an;
+
+       // redraw with the dndState set
+       window.requestAnimationFrame(draw);
      });
 
      canvas.addEventListener("mousemove", (e) => {
-       if (dragging) {
+       if (dndState.dragging) {
          const coords = mouseCoords(e);
-         const index = mouseCoordsToIndex(coords);
-         const piece = boardState[index];
+         const an = mouseCoordsToAN(coords);
+         const piece = boardState[an];
          const str = piece === undefined ? "empty" : pieceStr(piece);
-         console.log(`drag over ${index} (${str})`)
+         console.log(`drag over ${an} (${str})`)
        }
      });
 
-     const load = () => {
-       preLoadImages(() => {
-         draw();
-       });
-     };
+     // load all piece images and then draw the board and pieces
+     const load = () => preLoadImages(() => window.requestAnimationFrame(draw));
 
-     /*
-        tests();
-        draw();
-      */
-
+     tests();
      load();
 
      /* APPENDIX C */
@@ -492,19 +565,28 @@
          isCapture: false,
        });
 
-       testAssertEqual(gs.parseMove('Nf3'), {
-         pieceType: PieceType.Knight,
-         origin: 'g1',
-         destination: 'f3',
-         isCapture: false,
-       });
+       /*
+        *
+        * testAssertEqual(gs.parseMove('Nf3'), {
+        *   pieceType: PieceType.Knight,
+        *   origin: 'g1',
+        *   destination: 'f3',
+        *   isCapture: false,
+        * });
+        *
+        * testAssertEqual(gs.parseMove('e3'), {
+        *   pieceType: PieceType.Pawn,
+        *   origin: 'e2',
+        *   destination: 'e3',
+        *   isCapture: false,
+        * });
+        *
+        */
 
-       testAssertEqual(gs.parseMove('e3'), {
-         pieceType: PieceType.Pawn,
-         origin: 'e2',
-         destination: 'e3',
-         isCapture: false,
-       });
+       /* testAssertEqual(
+        *   possibleMoves(pieceNew(PieceType.Rook, PlayerID.One))
+        * )
+        */
      }
 
      /* Our testing facilities */

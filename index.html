@@ -5,14 +5,32 @@
     <title>chezzy</title>
     <meta name="description" content="Cheezy Chess">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+     #dashboard { display: none; }
+    </style>
   </head>
   <body>
-    <canvas id="canvas"></canvas>
+    <div>
+      <canvas id="canvas"></canvas>
+      <div id="dashboard">
+        <div id="move-new">
+          <h1>Player <span id="next-player" /> is up</h1>
+          <input id="move-input" type="text" />
+          <button id="move">Move</button>
+        </div>
+        <ol id="move-log"></ol>
+      </div>
+    </div>
+
     <script>
      const [boardWidthTile, boardHeightTile] = [8, 8];
      const PlayerID = {
        One: 0,
        Two: 1,
+     };
+     const PlayerNameById = {
+       [PlayerID.One]: "White",
+       [PlayerID.Two]: "Black",
      };
      const PieceType = {
        Bishop: 0,
@@ -22,34 +40,54 @@
        Queen:  4,
        Rook:   5,
      };
+     const PieceTypeName = {
+       [PieceType.Bishop]: 'Bishop',
+       [PieceType.King]:   'King',
+       [PieceType.Knight]: 'Knight',
+       [PieceType.Pawn]:   'Pawn',
+       [PieceType.Queen]:  'Queen',
+       [PieceType.Rook]:   'Rook',
+     };
      /* make up the prototype of a single piece */
      const pieceNew = (pieceType, playerID) => ({
        pieceType: pieceType,
        playerID:  playerID,
        image: null,
      });
+     /* Stringify a piece */
+     const pieceStr = (piece) => `${PlayerNameById[piece.playerID]} ${PieceTypeName[piece.pieceType]}`;
+     /* Get type of piece given a unique initial letter */
+     const pieceTypeFromLetter = (initial) => ({
+       'b': PieceType.Bishop,
+       'k': PieceType.King,
+       'n': PieceType.Knight,
+       'p': PieceType.Pawn,
+       'q': PieceType.Queen,
+       'r': PieceType.Rook,
+     }[initial.toLowerCase()]);
      /* build the relative URL of a given piece.  Thank you very much
         Wikipedia for the beautiful chess images taken from here
         https://en.wikipedia.org/wiki/Chess_piece#Number_of_pieces
 
-        For anybody else reading this.  Don't be a skimpy winky.  Just
+        For anybody else reading this.  Don't be a skimpy winpy.  Just
         donate some money to Wikipedia already. */
      const pieceImageRelativeUrl = piece => {
        const pieceLetter = {
-         [PieceType.Bishop]: 'b',
-         [PieceType.King]:   'k',
-         [PieceType.Knight]: 'n',
-         [PieceType.Pawn]:   'p',
-         [PieceType.Queen]:  'q',
-         [PieceType.Rook]:   'r',
-       }[piece.pieceType];
+       [PieceType.Bishop]: 'b',
+       [PieceType.King]:   'k',
+       [PieceType.Knight]: 'n',
+       [PieceType.Pawn]:   'p',
+       [PieceType.Queen]:  'q',
+       [PieceType.Rook]:   'r',
+     }[piece.pieceType];
        const playerLetter = {
          [PlayerID.One]: 'l',
          [PlayerID.Two]: 'd',
        }[piece.playerID];
        return `imgs/Chess_${pieceLetter}${playerLetter}t45.svg`;
      };
-
+     /** Lil shortcut to see who owns a given piece */
+     const isPlayerOne = thing => thing.playerID == PlayerID.One;
      /* Converts the algebraic notation to coordinates in the matrix. */
      const algebraicNotationToIndex = algebraicNotation => {
        /* The character 'a' occupies position 97 in the ASCII table,
@@ -61,6 +99,12 @@
           left corner. That's why we've got this lil subtraction
           here. */
        return [7 - rowId, columnId];
+     };
+     /* Converts board coordinates to algebraic notation */
+     const indexToAlgebraicNotatin = (row, column) => {
+       const columnID = String.fromCharCode(column + 97);
+       const rowID = String.fromCharCode((7 - row) + 49);
+       return `${columnID}${rowID}`;
      };
 
      const makeInitialState = () => ({
@@ -100,20 +144,154 @@
 
      /* Game state */
      const boardState = makeInitialState();
+     const moveLog = [];
+     let dragging = false;
+
+     /* Decides who plays the next move */
+     const whosTurn = () => {
+       /* Player One always starts the game */
+       if (moveLog.lenght === 0)
+         return PlayerID.One;
+       /* If the Player One made the last move, it's Player Two's time */
+       if (isPlayerOne(moveLog[0]))
+         return PlayerID.Two;
+       /* Otherwise it's Player Two's turn */
+       return PlayerID.One;
+     };
+
+     class GameState extends EventTarget {
+       constructor(pieces) {
+         super();
+         this.pieces = pieces;
+         this.moves = [];
+       }
+
+       whosTurn = () => {
+         /* Player One always starts the game */
+         if (this.moves.length === 0)
+           return PlayerID.One;
+         /* If the Player One made the last move, it's Player Two's time */
+         if (isPlayerOne(this.moves[0]))
+           return PlayerID.Two;
+         /* Otherwise it's Player Two's turn */
+         return PlayerID.One;
+       }
+
+       parseMove = (input, playerID) => {
+         if (input.length < 1) throw new Error("Can't parse empty move");
+         /* Default to parsing the moving of a pawn */
+         let pieceType = PieceType.Pawn;
+         /* Default to parsing a move that isn't a capture */
+         let isCapture = false;
+         /* Default to parsing a regular move, not an en passant */
+         let enPassant = false;
+         /* Default to parsing a move that isn't check */
+         let check = false;
+         /* We parse from right to left */
+         let cursor = input.length - 1;
+         /* Match `en passant' */
+         if (input.endsWith(' e.p.')) {
+           enPassant = true;
+           cursor -= 5;
+         }
+         if (input[cursor] === '+') {
+           check = true;
+           cursor--;
+         }
+
+         let rank = input[cursor--];
+         let file = input[cursor--];
+         const destination = `${file}${rank}`;
+
+         /* Are we done? */
+         if (cursor === 0) {
+           const origin = `${file}${rank-1}`;
+           return { pieceType, origin, destination, isCapture };
+         }
+         /* if we're not done, let's check if it's a capture */
+         if (input[cursor] === 'x') {
+           isCapture = true;
+           cursor--;
+         }
+
+         /* let's see if we have the origin */
+         let oRank = input[cursor--];
+         let oFile = input[cursor--];
+         let origin = `${oFile}${oRank}`;
+
+         if (cursor == 0) {
+           pieceType = pieceTypeFromLetter(input[cursor]);
+           cursor--;
+         }
+
+         return { pieceType, origin, destination, isCapture };
+         // /* ---- Some lil tooling ---- */
+
+         // /* Bookkeep where we are in the input string */
+         // let cursor = 0;
+         // /* Retrieve current character under the cursor */
+         // const current = () => input[cursor];
+         // /* Move the cursor forward one position */
+         // const next = () => cursor++;
+
+         // /* ---- Let the parsing begin ---- */
+
+         // if (current() === current().toUpperCase()) {
+         //   pieceType = pieceTypeFromLetter(current());
+         //   if (pieceType === undefined)
+         //     throw new Error(`Invalid initial for piece type: ${current()}`)
+         //   next();
+         // }
+
+         // const isCapture = current() === 'x';
+         // if (isCapture) next();
+
+         // const file = current(); next();
+         // const rank = current(); next();
+         // const destination = `${file}${rank}`;
+         // return { pieceType, origin, destination, isCapture };
+       }
+
+       move = (description) => {
+         const m = parseMove(description);
+         switch (m.pieceType) {
+           case PieceType.Pawn:
+             break;
+           default:
+             throw new Error(`there is no such piece type: ${m.pieceType}`);
+         }
+
+         const [row, column] = algebraicNotationToIndex(algebraicNotation);
+       }
+     }
+
+     /* ------------ Canvas Drawing Code ------------ */
 
      /* Display Constants */
-     const tilePx = 70;
+     const letters = ["a", "b", "c", "d", "e", "f", "g", "h"];
+     const [tilePx, boarderThickness] = [70, 40];
      const [tileWidthPx, tileHeightPx] = [tilePx, tilePx];
-     const [boardWidthPx, boardHeightPx] = [tileWidthPx * boardWidthTile, tileHeightPx * boardHeightTile];
+     const [boardWidthPx, boardHeightPx] = [
+       tileWidthPx * boardWidthTile + boarderThickness * 2,
+       tileHeightPx * boardHeightTile + boarderThickness * 2,
+     ];
      /* Access to Canvas API */
      const canvas = document.getElementById("canvas");
      const context = canvas.getContext("2d");
      /* Configure canvas Object */
      [canvas.width, canvas.height] = [boardWidthPx, boardHeightPx];
      /* Draw the board with the styles passed to the theme parameters */
-     const drawBoard = ({ player1Style, player2Style, tileBorderStyle, paddingPx }) => {
+     const drawBoard = ({
+       player1Style,
+       player2Style,
+       boarderBGStyle,
+       boarderFGStyle,
+       tileBorderStyle,
+       paddingPx,
+     }) => {
        context.strokeStyle = tileBorderStyle;
        const padding2Px = paddingPx * 2;
+
        let player1 = false;
        for (let column = 0; column < boardWidthTile; column++) {
          player1 = !player1;
@@ -121,9 +299,39 @@
            const [x, y] = [column * tileWidthPx, row * tileHeightPx];
            context.fillStyle = player1 ? player1Style : player2Style;
            player1 = !player1;
-           context.fillRect(x+paddingPx, y+paddingPx, tileWidthPx-padding2Px, tileHeightPx-padding2Px);
-           context.strokeRect(x+paddingPx, y+paddingPx, tileWidthPx-padding2Px, tileHeightPx-padding2Px);
+           context.fillRect(
+             boarderThickness+x+paddingPx,
+             boarderThickness+y+paddingPx,
+             tileWidthPx-padding2Px,
+             tileHeightPx-padding2Px,
+           );
+           context.strokeRect(
+             boarderThickness+x+paddingPx,
+             boarderThickness+y+paddingPx,
+             tileWidthPx-padding2Px,
+             tileHeightPx-padding2Px,
+           );
          }
+       }
+       /* Draw da letters */
+       context.fillStyle = boarderBGStyle;
+       context.fillRect(0, 0, boardWidthPx, boarderThickness);
+       context.fillRect(0, boardHeightPx-boarderThickness, boardWidthPx, boarderThickness);
+       for (let column = 0; column < boardWidthTile; column++) {
+         const x = column * tileWidthPx;
+         context.fillStyle = boarderFGStyle;
+         context.fillText(letters[column], x+boarderThickness+(tileWidthPx/2), boarderThickness/2);
+         context.fillText(letters[column], x+boarderThickness+(tileWidthPx/2), boardHeightPx-(boarderThickness/2));
+       }
+       /* Draw da numbas */
+       context.fillStyle = boarderBGStyle;
+       context.fillRect(0, 0, boarderThickness, boardHeightPx);
+       context.fillRect(boardWidthPx-boarderThickness, 0, boardWidthPx, boardHeightPx);
+       for (let row = 0; row < boardHeightTile; row++) {
+         const y = row * tileHeightPx+boarderThickness+(tileHeightPx/2);
+         context.fillStyle = boarderFGStyle;
+         context.fillText(`${boardHeightTile-row}`, boarderThickness/2, y);
+         context.fillText(`${boardHeightTile-row}`, boardWidthPx-(boarderThickness/2), y);
        }
      };
 
@@ -158,7 +366,7 @@
      const drawPieces = () => {
        for (const [algebraicNotation, piece] of Object.entries(boardState)) {
          const [row, column] = algebraicNotationToIndex(algebraicNotation);
-         const [x, y] = [column * tileWidthPx, row * tileHeightPx];
+         const [x, y] = [column * tileWidthPx + boarderThickness, row * tileHeightPx + boarderThickness];
          context.drawImage(piece.image, x, y, tileWidthPx, tileHeightPx)
        }
      };
@@ -167,6 +375,8 @@
        drawBoard({
          player1Style: '#eee',
          player2Style: '#666',
+         boarderBGStyle: '#000',
+         boarderFGStyle: '#fff',
          tileBorderStyle: '#444',
          paddingPx: 0,
        });
@@ -174,8 +384,139 @@
        drawPieces();
      };
 
-     preLoadImages(draw);
-     
+     const mouseCoords = (e) => {
+       const x = e.layerX - canvas.offsetLeft;
+       const y = e.layerY - canvas.offsetTop;
+       return { x, y };
+     }
+
+     const mouseCoordsToIndex = ({ x, y }) => {
+       if (x > boardWidthPx-boarderThickness || y > boardHeightPx-boarderThickness) {
+         return null;
+       }
+       const column = Math.ceil((x - boarderThickness) / tileWidthPx);
+       const row = Math.ceil((y - boarderThickness) / tileHeightPx);
+       return `${letters[Math.ceil(column)-1]}${boardHeightTile-row+1}`;
+     }
+
+     canvas.addEventListener("mouseout", (e) => {
+       // first disable dragging
+       dragging = false;
+       const { x: mouseX, y: mouseY } = mouseCoords(e);
+       /*
+          TODO: Should cancel the moving too
+        */
+       console.log(`out mouseX=${mouseX}, mouseY=${mouseY}`)
+     });
+
+     canvas.addEventListener("mouseup", (e) => {
+       // first disable dragging
+       dragging = false;
+       const coords = mouseCoords(e);
+       const index = mouseCoordsToIndex(coords);
+       const piece = boardState[index];
+       const str = piece === undefined ? "empty" : pieceStr(piece);
+       console.log(`drop at ${index} (${str})`)
+     });
+     canvas.addEventListener("mousedown", (e) => {
+       /* first enable dragging in case that's what the user wants */
+       dragging = true;
+       const coords = mouseCoords(e);
+       const index = mouseCoordsToIndex(coords);
+       const piece = boardState[index];
+       const str = piece === undefined ? "empty" : pieceStr(piece);
+       console.log(`click at ${index} (${str})`)
+     });
+
+     canvas.addEventListener("mousemove", (e) => {
+       if (dragging) {
+         const coords = mouseCoords(e);
+         const index = mouseCoordsToIndex(coords);
+         const piece = boardState[index];
+         const str = piece === undefined ? "empty" : pieceStr(piece);
+         console.log(`drag over ${index} (${str})`)
+       }
+     });
+
+     const load = () => {
+       preLoadImages(() => {
+         draw();
+       });
+     };
+
+     /*
+        tests();
+        draw();
+      */
+
+     load();
+
+     /* APPENDIX C */
+
+     /* Sample game: 1. e4 e5     2. Nf3 Nf6    3. d4 exd4    4. e5 Ne4     5. Qxd4 d5     6. exd6 e.p. Nxd6    7. Bg5 Nc6     8. Qe3+ Be7     9. Nbd2 0-0  10. 0-0-0 Re8   11. Kb1 (=)
+      *          Or: 1. e4 e5     2. Nf3 Nf6    3. d4 ed4     4. e5 Ne4     5. Qd4 d5      6. ed6 Nd6           7. Bg5 Nc6     8. Qe3 Be7      9. Nbd2 0-0  10. 0-0-0 Re8   11. Kb1 (=)
+      *          Or: 1. e2e4 e7e5 2.Ng1f3 Ng8f6 3. d2d4 e5xd4 4. e4e5 Nf6e4 5. Qd1xd4 d7d5 6. e5xd6 e.p. Ne4xd6 7. Bc1g5 Nb8c6 8. Qd4e3+ Bf8e7 9. Nb1d2 0-0 10. 0-0-0 Rf8e8 11. Kb1 (=)
+      */
+
+     function tests() {
+       testParseMove();
+     }
+
+     function testParseMove() {
+       /* Creates a new game state with all pieces and pawns on their
+          initial positions. */
+       const gs = new GameState();
+
+       /* -- Full Notation -- */
+
+       /* Pawn. Move one space forward */
+       testAssertEqual(gs.parseMove('f2f3'), {
+         pieceType: PieceType.Pawn,
+         origin: 'f2',
+         destination: 'f3',
+         isCapture: false,
+       });
+
+       /* Pawn. Move two spaces forward */
+       testAssertEqual(gs.parseMove('e2e4'), {
+         pieceType: PieceType.Pawn,
+         origin: 'e2',
+         destination: 'e4',
+         isCapture: false,
+       });
+
+       testAssertEqual(gs.parseMove('Ng1f3'), {
+         pieceType: PieceType.Knight,
+         origin: 'g1',
+         destination: 'f3',
+         isCapture: false,
+       });
+
+       testAssertEqual(gs.parseMove('Nf3'), {
+         pieceType: PieceType.Knight,
+         origin: 'g1',
+         destination: 'f3',
+         isCapture: false,
+       });
+
+       testAssertEqual(gs.parseMove('e3'), {
+         pieceType: PieceType.Pawn,
+         origin: 'e2',
+         destination: 'e3',
+         isCapture: false,
+       });
+     }
+
+     /* Our testing facilities */
+
+     function testAssertEqual(a, b) {
+       const [aa, bb] = [JSON.stringify(a), JSON.stringify(b)];
+       if (aa !== bb) {
+         throw new Error(`A !== B: ${aa}, ${bb}`);
+       }
+       return true;
+     }
+
     </script>
   </body>
 </html>

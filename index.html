@@ -149,6 +149,8 @@
        dragging: false,
        selectedPiece: undefined,
        selectedAN: undefined,
+       offsetX: 0,
+       offsetY: 0,
      };
 
      /* Decides who plays the next move */
@@ -389,7 +391,13 @@
      const drawPieces = () => {
        for (const [algebraicNotation, piece] of Object.entries(boardState)) {
          const [row, column] = algebraicNotationToIndex(algebraicNotation);
-         const [x, y] = [column * tileWidthPx + boarderThickness, row * tileHeightPx + boarderThickness];
+         let [x, y] = [column * tileWidthPx + boarderThickness, row * tileHeightPx + boarderThickness];
+
+         // draw piece being dragged
+         if (algebraicNotation === dndState.selectedAN) {
+           x = dndState.offsetX - (tileWidthPx/2);
+           y = dndState.offsetY - (tileHeightPx/2);
+         }
          context.drawImage(piece.image, x, y, tileWidthPx, tileHeightPx)
        }
      };
@@ -481,6 +489,12 @@
        const str = piece === undefined ? "empty" : pieceStr(piece);
        console.log(`drop at ${an} (${str})`)
 
+       // This is actually a valid move
+       if (possibleMoves(dndState.selectedPiece, dndState.selectedAN).includes(an)) {
+         boardState[an] = dndState.selectedPiece;
+         delete boardState[dndState.selectedAN];
+       }
+
        // reset drag and drop state
        dndState.dragging = false;
        dndState.selectedPiece = undefined;
@@ -503,6 +517,8 @@
        dndState.dragging = true;
        dndState.selectedPiece = piece;
        dndState.selectedAN = an;
+       dndState.offsetX = coords.x;
+       dndState.offsetY = coords.y;
 
        // redraw with the dndState set
        window.requestAnimationFrame(draw);
@@ -514,7 +530,13 @@
          const an = mouseCoordsToAN(coords);
          const piece = boardState[an];
          const str = piece === undefined ? "empty" : pieceStr(piece);
-         console.log(`drag over ${an} (${str})`)
+         console.log(`drag over ${an} (${str}): x=${coords.x} y=${coords.y}`)
+
+         dndState.offsetX = coords.x;
+         dndState.offsetY = coords.y;
+
+         // redraw with the dndState set
+         window.requestAnimationFrame(draw);
        }
      });
 

@@ -511,15 +511,13 @@
          dest.push(anT1);
        if (row === baseRow) {
          const firstTileInFront = indexToAlgebraicNotation(firstRowInFront, col);
-         if (isTileEmpty(firstTileInFront)) {
+         if (isTileEmpty(firstTileInFront))
            dest.push(firstTileInFront);
-         } else {
+         else
            return dest;
-         }
          const secondTileInFront = indexToAlgebraicNotation(secondRowInFront, col);
-         if (isTileEmpty(secondTileInFront)) {
+         if (isTileEmpty(secondTileInFront))
            dest.push(secondTileInFront);
-         }
          return dest;
        }
        if (firstRowInFront > 0 && firstRowInFront < boardHeightTile) {

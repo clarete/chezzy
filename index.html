@@ -102,6 +102,8 @@
      };
      /* Converts board coordinates to algebraic notation */
      const indexToAlgebraicNotation = (row, column) => {
+       if (row < 0 || row >= boardHeightTile) return null;
+       if (column < 0 || column >= boardWidthTile) return null;
        const columnID = String.fromCharCode(column + 97);
        const rowID = String.fromCharCode((7 - row) + 49);
        return `${columnID}${rowID}`;
@@ -152,6 +154,13 @@
        offsetX: 0,
        offsetY: 0,
      };
+
+     /* Check if tile in `an` has any pieces on it */
+     const isTileEmpty = an => boardState[an] === undefined;
+
+     /* If the tile in `an` is an enemy of `piece`.
+        Note: Use after checking the tile with isTileEmpty */
+     const isTileEnemy = (piece, an) => boardState[an].playerID !== piece.playerID;
 
      /* Decides who plays the next move */
      const whosTurn = () => {
@@ -431,39 +440,250 @@
        return `${letters[Math.ceil(column)-1]}${boardHeightTile-row+1}`;
      }
 
-     const possibleMoves = (piece, an) => {
+     const possibleMovesKing = (piece, an) => {
        const [row, col] = algebraicNotationToIndex(an);
+       return [
+         indexToAlgebraicNotation(row-1, col+0),
+         indexToAlgebraicNotation(row-1, col+1),
+         indexToAlgebraicNotation(row-0, col+1),
+         indexToAlgebraicNotation(row+1, col+1),
+         indexToAlgebraicNotation(row+1, col+0),
+         indexToAlgebraicNotation(row+1, col-1),
+         indexToAlgebraicNotation(row+0, col-1),
+         indexToAlgebraicNotation(row-1, col-1),
+       ].filter(an => {
+         if (an === null) return false;
+         const otherPiece = boardState[an];
+         return otherPiece === undefined || otherPiece.playerID !== piece.playerID;
+       });
+     };
+
+     const possibleMovesKnight = (piece, an) => {
+       const [row, col] = algebraicNotationToIndex(an);
+       return [
+         indexToAlgebraicNotation(row-2, col+1),
+         indexToAlgebraicNotation(row-2, col-1),
+         indexToAlgebraicNotation(row+2, col-1),
+         indexToAlgebraicNotation(row+2, col+1),
+         indexToAlgebraicNotation(row-1, col+2),
+         indexToAlgebraicNotation(row-1, col-2),
+         indexToAlgebraicNotation(row+1, col-2),
+         indexToAlgebraicNotation(row+1, col+2),
+       ].filter(an => {
+         if (an === null) return false;
+         const otherPiece = boardState[an];
+         return otherPiece === undefined || otherPiece.playerID !== piece.playerID;
+       });
+     };
+
+     const possibleMovesPawn = (piece, an) => {
+       const [row, col] = algebraicNotationToIndex(an);
+       const dest = [];  // places where the pawn can land
+       let baseRow, firstRowInFront, secondRowInFront;
+       switch (piece.playerID) {
+         case PlayerID.One:
+           baseRow = 6;
+           firstRowInFront = row-1;
+           secondRowInFront = row-2;
+           break;
+         case PlayerID.Two:
+           baseRow = 1;
+           firstRowInFront = row+1;
+           secondRowInFront = row+2;
+           break;
+       }
+       const [anT0, anT1] = [
+         indexToAlgebraicNotation(firstRowInFront, col-1),
+         indexToAlgebraicNotation(firstRowInFront, col+1),
+       ];
+       const [st0, st1] = [boardState[anT0], boardState[anT1]];
+       if (st0 !== undefined && st0.playerID !== piece.playerID)
+         dest.push(anT0);
+       if (st1 !== undefined && st1.playerID !== piece.playerID)
+         dest.push(anT1);
+       if (row === baseRow) {
+         const firstTileInFront = indexToAlgebraicNotation(firstRowInFront, col);
+         if (isTileEmpty(firstTileInFront)) {
+           dest.push(firstTileInFront);
+         } else {
+           return dest;
+         }
+         const secondTileInFront = indexToAlgebraicNotation(secondRowInFront, col);
+         if (isTileEmpty(secondTileInFront)) {
+           dest.push(secondTileInFront);
+         }
+         return dest;
+       }
+       if (firstRowInFront > 0 && firstRowInFront < boardHeightTile) {
+         const next = indexToAlgebraicNotation(firstRowInFront, col);
+         if (next !== null && isTileEmpty(next))
+           dest.push(next);
+         return dest;
+       }
+     }
+
+     /* Note: coordinates from the point of view of player One, the
+        one that starts on the bottom of the board.  */
+
+     const _possibleMovesNorth = (piece, row, col) => {
+       const dest = [];
+       for (let i = row-1; i >= 0; i--) {
+         const thisTile = indexToAlgebraicNotation(i, col);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesSouth = (piece, row, col) => {
+       const dest = [];
+       for (let i = row+1; i < boardHeightTile; i++) {
+         const thisTile = indexToAlgebraicNotation(i, col);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesWest = (piece, row, col) => {
+       const dest = [];
+       for (let i = col-1; i >= 0; i--) {
+         const thisTile = indexToAlgebraicNotation(row, i);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesEast = (piece, row, col) => {
+       const dest = [];
+       for (let i = col+1; i < boardWidthTile; i++) {
+         const thisTile = indexToAlgebraicNotation(row, i);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesNorthWest = (piece, row, col) => {
+       const dest = [];
+       for (let i = row-1, j = col-1; i >= 0 && j >= 0; i--, j--) {
+         const thisTile = indexToAlgebraicNotation(i, j);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesNorthEast = (piece, row, col) => {
+       const dest = [];
+       for (let i = row-1, j = col+1; i >= 0 && j < boardWidthTile; i--, j++) {
+         const thisTile = indexToAlgebraicNotation(i, j);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesSouthWest = (piece, row, col) => {
+       const dest = [];
+       for (let i = row+1, j = col-1; i < boardHeightTile && j >= 0; i++, j--) {
+         const thisTile = indexToAlgebraicNotation(i, j);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+     const _possibleMovesSouthEast = (piece, row, col) => {
+       const dest = [];
+       for (let i = row+1, j = col+1; i < boardHeightTile && j < boardWidthTile; i++, j++) {
+         const thisTile = indexToAlgebraicNotation(i, j);
+         if (isTileEmpty(thisTile)) {
+           dest.push(thisTile);
+           continue;
+         }
+         if (isTileEnemy(piece, thisTile))
+           dest.push(thisTile);
+         break;
+       }
+       return dest;
+     };
+
+     const possibleMovesBishop = (piece, an) => {
+       const [row, col] = algebraicNotationToIndex(an);
+       return []
+         .concat(_possibleMovesNorthWest(piece, row, col))
+         .concat(_possibleMovesNorthEast(piece, row, col))
+         .concat(_possibleMovesSouthWest(piece, row, col))
+         .concat(_possibleMovesSouthEast(piece, row, col));
+     };
+
+     const possibleMovesQueen = (piece, an) => {
+       const [row, col] = algebraicNotationToIndex(an);
+       return []
+         .concat(_possibleMovesNorth(piece, row, col))
+         .concat(_possibleMovesSouth(piece, row, col))
+         .concat(_possibleMovesWest(piece, row, col))
+         .concat(_possibleMovesEast(piece, row, col))
+         .concat(_possibleMovesNorthWest(piece, row, col))
+         .concat(_possibleMovesNorthEast(piece, row, col))
+         .concat(_possibleMovesSouthWest(piece, row, col))
+         .concat(_possibleMovesSouthEast(piece, row, col))
+       ;
+     };
+
+     const possibleMovesRook = (piece, an) => {
+       const [row, col] = algebraicNotationToIndex(an);
+       return []
+         .concat(_possibleMovesNorth(piece, row, col))
+         .concat(_possibleMovesSouth(piece, row, col))
+         .concat(_possibleMovesWest(piece, row, col))
+         .concat(_possibleMovesEast(piece, row, col));
+     };
+
+     const possibleMoves = (piece, an) => {
        switch (piece.pieceType) {
          case PieceType.Bishop:
-           break;
+           return possibleMovesBishop(piece, an);
          case PieceType.King:
-           break;
+           return possibleMovesKing(piece, an);
          case PieceType.Knight:
-           break;
+           return possibleMovesKnight(piece, an);
          case PieceType.Pawn:
-           switch (piece.playerID) {
-             case PlayerID.One:
-               if (row === 6) // zero based
-                 return [
-                   indexToAlgebraicNotation(row-1, col),
-                   indexToAlgebraicNotation(row-2, col),
-                 ];
-               if (row-1 > 0)
-                 return [indexToAlgebraicNotation(row-1, col)];
-             case PlayerID.Two:
-               if (row === 1) // zero based
-                 return [
-                   indexToAlgebraicNotation(row+1, col),
-                   indexToAlgebraicNotation(row+2, col),
-                 ];
-               if (row+1 > 0)
-                 return [indexToAlgebraicNotation(row+1, col)];
-           }
-           break;
+           return possibleMovesPawn(piece, an);
          case PieceType.Queen:
-           break;
+           return possibleMovesQueen(piece, an);
          case PieceType.Rook:
-           break;
+           return possibleMovesRook(piece, an);
        }
        return [];
      };

@@ -505,10 +505,9 @@
          indexToAlgebraicNotation(firstRowInFront, col-1),
          indexToAlgebraicNotation(firstRowInFront, col+1),
        ];
-       const [st0, st1] = [boardState[anT0], boardState[anT1]];
-       if (st0 !== undefined && st0.playerID !== piece.playerID)
+       if (!isTileEmpty(anT0) && isTileEnemy(piece, anT0))
          dest.push(anT0);
-       if (st1 !== undefined && st1.playerID !== piece.playerID)
+       if (!isTileEmpty(anT1) && isTileEnemy(piece, anT1))
          dest.push(anT1);
        if (row === baseRow) {
          const firstTileInFront = indexToAlgebraicNotation(firstRowInFront, col);

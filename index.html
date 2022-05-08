@@ -299,6 +299,7 @@
      const drawBoard = ({
        player1Style,
        player2Style,
+       boardBGStyle,
        boarderBGStyle,
        boarderFGStyle,
        tileBorderStyle,
@@ -320,6 +321,11 @@
          );
        }
 
+       // reset boards background color
+       context.fillStyle = boardBGStyle;
+       context.fillRect(0, 0, boardWidthPx, boardHeightPx);
+
+       // draw the checkerd pattern top down
        let player1 = false;
        for (let column = 0; column < boardWidthTile; column++) {
          player1 = !player1;
@@ -329,6 +335,8 @@
            context.fillStyle = player1 ? player1Style : player2Style;
            player1 = !player1;
 
+           // highlight if the tile is in the list of possible moves of
+           // the currently selected piece
            if (possibleTiles.includes(an)) {
              context.fillStyle = tileSelectedStyle;
            }
@@ -415,11 +423,12 @@
        drawBoard({
          player1Style: '#eee',
          player2Style: '#666',
+         boardBGStyle: '#fff',
          boarderBGStyle: '#000',
          boarderFGStyle: '#fff',
          tileBorderStyle: '#444',
          tileSelectedStyle: '#fc0',
-         paddingPx: 0,
+         paddingPx: 2,
        });
 
        drawPieces();

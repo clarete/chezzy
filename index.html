@@ -710,7 +710,9 @@
        console.log(`drop at ${an} (${str})`)
 
        // This is actually a valid move
-       if (possibleMoves(dndState.selectedPiece, dndState.selectedAN).includes(an)) {
+       if (dndState.selectedPiece !== undefined &&
+           dndState.selectedAN !== undefined &&
+           possibleMoves(dndState.selectedPiece, dndState.selectedAN).includes(an)) {
          boardState[an] = dndState.selectedPiece;
          delete boardState[dndState.selectedAN];
        }

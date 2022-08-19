@@ -6,22 +6,18 @@
     <meta name="description" content="Cheezy Chess">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-     #dashboard { display: none; }
+     .wrap-content {
+       width: 640px;
+       padding: 20px;
+       margin: 0 auto;
+     }
     </style>
   </head>
   <body>
-    <div>
+    <div class="wrap-content">
+      <h1>Play Chess</h1>
       <canvas id="canvas"></canvas>
-      <div id="dashboard">
-        <div id="move-new">
-          <h1>Player <span id="next-player" /> is up</h1>
-          <input id="move-input" type="text" />
-          <button id="move">Move</button>
-        </div>
-        <ol id="move-log"></ol>
-      </div>
     </div>
-
     <script>
      const [boardWidthTile, boardHeightTile] = [8, 8];
      const PlayerID = {
